@@ -17,6 +17,8 @@ elseif(UNIX)
   elseif (${ARCH} STREQUAL "x86")
     set(PERLASM_FLAGS "-fPIC -DOPENSSL_IA32_SSE2")
     set(PERLASM_STYLE elf)
+  elseif (${ARCH} STREQUAL "ppc64le")
+    set(PERLASM_STYLE ppc64le)
   else()
     set(PERLASM_STYLE elf)
   endif()
@@ -41,10 +43,11 @@ endif()
 function(perlasm dest src)
   add_custom_command(
     OUTPUT ${dest}
-    COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${src} ${PERLASM_STYLE} ${PERLASM_FLAGS} ${ARGN} > ${dest}
+    COMMAND ${PERL_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${src} ${PERLASM_STYLE} ${PERLASM_FLAGS} ${ARGN} ${dest}
     DEPENDS
     ${src}
     ${PROJECT_SOURCE_DIR}/crypto/perlasm/arm-xlate.pl
+    ${PROJECT_SOURCE_DIR}/crypto/perlasm/ppc-xlate.pl
     ${PROJECT_SOURCE_DIR}/crypto/perlasm/x86_64-xlate.pl
     ${PROJECT_SOURCE_DIR}/crypto/perlasm/x86asm.pl
     ${PROJECT_SOURCE_DIR}/crypto/perlasm/x86gas.pl
@@ -61,6 +64,7 @@ add_subdirectory(err)
 add_subdirectory(buf)
 add_subdirectory(base64)
 add_subdirectory(bytestring)
+add_subdirectory(pool)
 
 # Level 0.2 - depends on nothing but itself
 add_subdirectory(sha)
@@ -74,7 +78,6 @@ add_subdirectory(conf)
 add_subdirectory(chacha)
 add_subdirectory(poly1305)
 add_subdirectory(curve25519)
-add_subdirectory(newhope)
 
 # Level 1, depends only on 0.*
 add_subdirectory(digest)
@@ -116,6 +119,7 @@ add_library(
   cpu-arm.c
   cpu-arm-linux.c
   cpu-intel.c
+  cpu-ppc64le.c
   crypto.c
   ex_data.c
   mem.c
@@ -125,13 +129,13 @@ add_library(
   thread_none.c
   thread_pthread.c
   thread_win.c
-  time_support.c
 
   $<TARGET_OBJECTS:stack>
   $<TARGET_OBJECTS:lhash>
   $<TARGET_OBJECTS:err>
   $<TARGET_OBJECTS:base64>
   $<TARGET_OBJECTS:bytestring>
+  $<TARGET_OBJECTS:pool>
   $<TARGET_OBJECTS:sha>
   $<TARGET_OBJECTS:md4>
   $<TARGET_OBJECTS:md5>
@@ -166,7 +170,6 @@ add_library(
   $<TARGET_OBJECTS:x509>
   $<TARGET_OBJECTS:x509v3>
   $<TARGET_OBJECTS:pkcs8_lib>
-  $<TARGET_OBJECTS:newhope>
 )
 
 if(NOT MSVC AND NOT ANDROID)
@@ -176,7 +179,7 @@ endif()
 add_executable(
   constant_time_test
 
-  constant_time_test.c
+  constant_time_test.cc
 
   $<TARGET_OBJECTS:test_support>
 )
@@ -198,8 +201,33 @@ add_dependencies(all_tests thread_test)
 add_executable(
   refcount_test
 
-  refcount_test.c
+  refcount_test.cc
 )
 
 target_link_libraries(refcount_test crypto)
 add_dependencies(all_tests refcount_test)
+
+# TODO(davidben): Convert the remaining tests to GTest.
+add_executable(
+  crypto_test
+
+  asn1/asn1_test.cc
+  bio/bio_test.cc
+  chacha/chacha_test.cc
+  curve25519/x25519_test.cc
+  dh/dh_test.cc
+  dsa/dsa_test.cc
+  ec/ec_test.cc
+  err/err_test.cc
+  evp/evp_extra_test.cc
+  rsa/rsa_test.cc
+
+  $<TARGET_OBJECTS:gtest_main>
+  $<TARGET_OBJECTS:test_support>
+)
+
+target_link_libraries(crypto_test crypto gtest)
+if (WIN32)
+  target_link_libraries(crypto_test ws2_32)
+endif()
+add_dependencies(all_tests crypto_test)

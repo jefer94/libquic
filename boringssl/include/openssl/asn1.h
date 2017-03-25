@@ -205,6 +205,8 @@ struct asn1_object_st
 	int flags;	/* Should we free this one */
 	};
 
+DECLARE_STACK_OF(ASN1_OBJECT)
+
 #define ASN1_STRING_FLAG_BITS_LEFT 0x08 /* Set if 0x07 has bits left value */
 /* This indicates that the ASN1_STRING is not a real value but just a place
  * holder for the location where indefinite length constructed data should
@@ -244,11 +246,16 @@ typedef struct ASN1_ENCODING_st
 	{
 	unsigned char *enc;	/* DER encoding */
 	long len;		/* Length of encoding */
-	int modified;		 /* set to 1 if 'enc' is invalid */
+	int modified;		/* set to 1 if 'enc' is invalid */
+	/* alias_only is zero if |enc| owns the buffer that it points to
+	 * (although |enc| may still be NULL). If one, |enc| points into a
+	 * buffer that is owned elsewhere. */
+	unsigned alias_only:1;
+	/* alias_only_on_next_parse is one iff the next parsing operation
+	 * should avoid taking a copy of the input and rather set
+	 * |alias_only|. */
+	unsigned alias_only_on_next_parse:1;
 	} ASN1_ENCODING;
-
-/* Used with ASN1 LONG type: if a long is set to this it is omitted */
-#define ASN1_LONG_UNDEF	0x7fffffffL
 
 #define STABLE_FLAGS_MALLOC	0x01
 #define STABLE_NO_MASK		0x02
@@ -475,7 +482,7 @@ typedef const ASN1_ITEM ASN1_ITEM_EXP;
 
 DECLARE_ASN1_SET_OF(ASN1_INTEGER)
 
-typedef struct asn1_type_st
+struct asn1_type_st
 	{
 	int type;
 	union	{
@@ -503,7 +510,7 @@ typedef struct asn1_type_st
 		ASN1_STRING *		sequence;
 		ASN1_VALUE *		asn1_value;
 		} value;
-	} ASN1_TYPE;
+    };
 
 DECLARE_ASN1_SET_OF(ASN1_TYPE)
 
@@ -574,9 +581,6 @@ typedef struct BIT_STRING_BITNAME_st {
 		(const ASN1_STRING *)a,(const ASN1_STRING *)b)
 #define M_ASN1_OCTET_STRING_set(a,b,c)	ASN1_STRING_set((ASN1_STRING *)a,b,c)
 #define M_ASN1_OCTET_STRING_print(a,b)	ASN1_STRING_print(a,(ASN1_STRING *)b)
-#define M_i2d_ASN1_OCTET_STRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_OCTET_STRING,\
-		V_ASN1_UNIVERSAL)
 
 #define B_ASN1_TIME \
 			B_ASN1_UTCTIME | \
@@ -609,59 +613,26 @@ typedef struct BIT_STRING_BITNAME_st {
 
 #define M_ASN1_PRINTABLE_new()	ASN1_STRING_type_new(V_ASN1_T61STRING)
 #define M_ASN1_PRINTABLE_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_PRINTABLE(a,pp) i2d_ASN1_bytes((ASN1_STRING *)a,\
-		pp,a->type,V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_PRINTABLE(a,pp,l) \
-		d2i_ASN1_type_bytes((ASN1_STRING **)a,pp,l, \
-			B_ASN1_PRINTABLE)
 
 #define M_DIRECTORYSTRING_new() ASN1_STRING_type_new(V_ASN1_PRINTABLESTRING)
 #define M_DIRECTORYSTRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_DIRECTORYSTRING(a,pp) i2d_ASN1_bytes((ASN1_STRING *)a,\
-						pp,a->type,V_ASN1_UNIVERSAL)
-#define M_d2i_DIRECTORYSTRING(a,pp,l) \
-		d2i_ASN1_type_bytes((ASN1_STRING **)a,pp,l, \
-			B_ASN1_DIRECTORYSTRING)
 
 #define M_DISPLAYTEXT_new() ASN1_STRING_type_new(V_ASN1_VISIBLESTRING)
 #define M_DISPLAYTEXT_free(a) ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_DISPLAYTEXT(a,pp) i2d_ASN1_bytes((ASN1_STRING *)a,\
-						pp,a->type,V_ASN1_UNIVERSAL)
-#define M_d2i_DISPLAYTEXT(a,pp,l) \
-		d2i_ASN1_type_bytes((ASN1_STRING **)a,pp,l, \
-			B_ASN1_DISPLAYTEXT)
 
 #define M_ASN1_PRINTABLESTRING_new() (ASN1_PRINTABLESTRING *)\
 		ASN1_STRING_type_new(V_ASN1_PRINTABLESTRING)
 #define M_ASN1_PRINTABLESTRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_PRINTABLESTRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_PRINTABLESTRING,\
-		V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_PRINTABLESTRING(a,pp,l) \
-		(ASN1_PRINTABLESTRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_PRINTABLESTRING)
 
 #define M_ASN1_T61STRING_new()	(ASN1_T61STRING *)\
 		ASN1_STRING_type_new(V_ASN1_T61STRING)
 #define M_ASN1_T61STRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_T61STRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_T61STRING,\
-		V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_T61STRING(a,pp,l) \
-		(ASN1_T61STRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_T61STRING)
 
 #define M_ASN1_IA5STRING_new()	(ASN1_IA5STRING *)\
 		ASN1_STRING_type_new(V_ASN1_IA5STRING)
 #define M_ASN1_IA5STRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
 #define M_ASN1_IA5STRING_dup(a)	\
 		(ASN1_IA5STRING *)ASN1_STRING_dup((const ASN1_STRING *)a)
-#define M_i2d_ASN1_IA5STRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_IA5STRING,\
-			V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_IA5STRING(a,pp,l) \
-		(ASN1_IA5STRING *)d2i_ASN1_type_bytes((ASN1_STRING **)a,pp,l,\
-			B_ASN1_IA5STRING)
 
 #define M_ASN1_UTCTIME_new()	(ASN1_UTCTIME *)\
 		ASN1_STRING_type_new(V_ASN1_UTCTIME)
@@ -684,56 +655,22 @@ typedef struct BIT_STRING_BITNAME_st {
 #define M_ASN1_GENERALSTRING_new()	(ASN1_GENERALSTRING *)\
 		ASN1_STRING_type_new(V_ASN1_GENERALSTRING)
 #define M_ASN1_GENERALSTRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_GENERALSTRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_GENERALSTRING,\
-			V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_GENERALSTRING(a,pp,l) \
-		(ASN1_GENERALSTRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_GENERALSTRING)
 
 #define M_ASN1_UNIVERSALSTRING_new()	(ASN1_UNIVERSALSTRING *)\
 		ASN1_STRING_type_new(V_ASN1_UNIVERSALSTRING)
 #define M_ASN1_UNIVERSALSTRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_UNIVERSALSTRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_UNIVERSALSTRING,\
-			V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_UNIVERSALSTRING(a,pp,l) \
-		(ASN1_UNIVERSALSTRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_UNIVERSALSTRING)
 
 #define M_ASN1_BMPSTRING_new()	(ASN1_BMPSTRING *)\
 		ASN1_STRING_type_new(V_ASN1_BMPSTRING)
 #define M_ASN1_BMPSTRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_BMPSTRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_BMPSTRING,\
-			V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_BMPSTRING(a,pp,l) \
-		(ASN1_BMPSTRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_BMPSTRING)
 
 #define M_ASN1_VISIBLESTRING_new()	(ASN1_VISIBLESTRING *)\
 		ASN1_STRING_type_new(V_ASN1_VISIBLESTRING)
 #define M_ASN1_VISIBLESTRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_VISIBLESTRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_VISIBLESTRING,\
-			V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_VISIBLESTRING(a,pp,l) \
-		(ASN1_VISIBLESTRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_VISIBLESTRING)
 
 #define M_ASN1_UTF8STRING_new()	(ASN1_UTF8STRING *)\
 		ASN1_STRING_type_new(V_ASN1_UTF8STRING)
 #define M_ASN1_UTF8STRING_free(a)	ASN1_STRING_free((ASN1_STRING *)a)
-#define M_i2d_ASN1_UTF8STRING(a,pp) \
-		i2d_ASN1_bytes((ASN1_STRING *)a,pp,V_ASN1_UTF8STRING,\
-			V_ASN1_UNIVERSAL)
-#define M_d2i_ASN1_UTF8STRING(a,pp,l) \
-		(ASN1_UTF8STRING *)d2i_ASN1_type_bytes\
-		((ASN1_STRING **)a,pp,l,B_ASN1_UTF8STRING)
-
-  /* for the is_set parameter to i2d_ASN1_SET */
-#define IS_SEQUENCE	0
-#define IS_SET		1
 
 DECLARE_ASN1_FUNCTIONS_fname(ASN1_TYPE, ASN1_ANY, ASN1_TYPE)
 
@@ -842,19 +779,9 @@ OPENSSL_EXPORT int ASN1_TIME_check(ASN1_TIME *t);
 OPENSSL_EXPORT ASN1_GENERALIZEDTIME *ASN1_TIME_to_generalizedtime(ASN1_TIME *t, ASN1_GENERALIZEDTIME **out);
 OPENSSL_EXPORT int ASN1_TIME_set_string(ASN1_TIME *s, const char *str);
 
-OPENSSL_EXPORT int i2d_ASN1_SET(STACK_OF(OPENSSL_BLOCK) *a, unsigned char **pp, i2d_of_void *i2d, int ex_tag, int ex_class, int is_set);
-OPENSSL_EXPORT STACK_OF(OPENSSL_BLOCK) *d2i_ASN1_SET(STACK_OF(OPENSSL_BLOCK) **a,
-			      const unsigned char **pp,
-			      long length, d2i_of_void *d2i,
-			      void (*free_func)(OPENSSL_BLOCK), int ex_tag,
-			      int ex_class);
-
 OPENSSL_EXPORT int i2a_ASN1_INTEGER(BIO *bp, ASN1_INTEGER *a);
-OPENSSL_EXPORT int a2i_ASN1_INTEGER(BIO *bp,ASN1_INTEGER *bs,char *buf,int size);
 OPENSSL_EXPORT int i2a_ASN1_ENUMERATED(BIO *bp, ASN1_ENUMERATED *a);
-OPENSSL_EXPORT int a2i_ASN1_ENUMERATED(BIO *bp,ASN1_ENUMERATED *bs,char *buf,int size);
 OPENSSL_EXPORT int i2a_ASN1_OBJECT(BIO *bp,ASN1_OBJECT *a);
-OPENSSL_EXPORT int a2i_ASN1_STRING(BIO *bp,ASN1_STRING *bs,char *buf,int size);
 OPENSSL_EXPORT int i2a_ASN1_STRING(BIO *bp, ASN1_STRING *a, int type);
 OPENSSL_EXPORT int i2t_ASN1_OBJECT(char *buf,int buf_len,ASN1_OBJECT *a);
 
@@ -875,11 +802,7 @@ OPENSSL_EXPORT BIGNUM *ASN1_ENUMERATED_to_BN(ASN1_ENUMERATED *ai,BIGNUM *bn);
 /* given a string, return the correct type, max is the maximum length */
 OPENSSL_EXPORT int ASN1_PRINTABLE_type(const unsigned char *s, int max);
 
-OPENSSL_EXPORT int i2d_ASN1_bytes(ASN1_STRING *a, unsigned char **pp, int tag, int xclass);
-OPENSSL_EXPORT ASN1_STRING *d2i_ASN1_bytes(ASN1_STRING **a, const unsigned char **pp, long length, int Ptag, int Pclass);
 OPENSSL_EXPORT unsigned long ASN1_tag2bit(int tag);
-/* type is one or more of the B_ASN1_ values. */
-OPENSSL_EXPORT ASN1_STRING *d2i_ASN1_type_bytes(ASN1_STRING **a,const unsigned char **pp, long length,int type);
 
 /* PARSING */
 OPENSSL_EXPORT int asn1_Finish(ASN1_CTX *c);
@@ -969,8 +892,6 @@ OPENSSL_EXPORT int ASN1_GENERALIZEDTIME_print(BIO *fp, const ASN1_GENERALIZEDTIM
 OPENSSL_EXPORT int ASN1_TIME_print(BIO *fp, const ASN1_TIME *a);
 OPENSSL_EXPORT int ASN1_STRING_print(BIO *bp, const ASN1_STRING *v);
 OPENSSL_EXPORT int ASN1_STRING_print_ex(BIO *out, ASN1_STRING *str, unsigned long flags);
-OPENSSL_EXPORT int ASN1_parse(BIO *bp,const unsigned char *pp,long len,int indent);
-OPENSSL_EXPORT int ASN1_parse_dump(BIO *bp,const unsigned char *pp,long len,int indent,int dump);
 OPENSSL_EXPORT const char *ASN1_tag2str(int tag);
 
 /* Used to load and write netscape format cert */
@@ -979,16 +900,7 @@ DECLARE_ASN1_FUNCTIONS(NETSCAPE_X509)
 
 int ASN1_UNIVERSALSTRING_to_string(ASN1_UNIVERSALSTRING *s);
 
-OPENSSL_EXPORT STACK_OF(OPENSSL_BLOCK) *ASN1_seq_unpack(const unsigned char *buf, int len, d2i_of_void *d2i, void (*free_func)(OPENSSL_BLOCK));
-OPENSSL_EXPORT unsigned char *ASN1_seq_pack(STACK_OF(OPENSSL_BLOCK) *safes, i2d_of_void *i2d, unsigned char **buf, int *len );
-OPENSSL_EXPORT void *ASN1_unpack_string(ASN1_STRING *oct, d2i_of_void *d2i);
 OPENSSL_EXPORT void *ASN1_item_unpack(ASN1_STRING *oct, const ASN1_ITEM *it);
-OPENSSL_EXPORT ASN1_STRING *ASN1_pack_string(void *obj, i2d_of_void *i2d, ASN1_OCTET_STRING **oct);
-
-#define ASN1_pack_string_of(type,obj,i2d,oct) \
-    (ASN1_pack_string(CHECKED_PTR_OF(type, obj), \
-		      CHECKED_I2D_OF(type, i2d), \
-		      oct))
 
 OPENSSL_EXPORT ASN1_STRING *ASN1_item_pack(void *obj, const ASN1_ITEM *it, ASN1_OCTET_STRING **oct);
 
@@ -1012,70 +924,27 @@ OPENSSL_EXPORT ASN1_VALUE * ASN1_item_d2i(ASN1_VALUE **val, const unsigned char 
 OPENSSL_EXPORT int ASN1_item_i2d(ASN1_VALUE *val, unsigned char **out, const ASN1_ITEM *it);
 OPENSSL_EXPORT int ASN1_item_ndef_i2d(ASN1_VALUE *val, unsigned char **out, const ASN1_ITEM *it);
 
-OPENSSL_EXPORT void ASN1_add_oid_module(void);
-
 OPENSSL_EXPORT ASN1_TYPE *ASN1_generate_nconf(char *str, CONF *nconf);
 OPENSSL_EXPORT ASN1_TYPE *ASN1_generate_v3(char *str, X509V3_CTX *cnf);
 
-/* ASN1 Print flags */
-
-/* Indicate missing OPTIONAL fields */
-#define ASN1_PCTX_FLAGS_SHOW_ABSENT		0x001	
-/* Mark start and end of SEQUENCE */
-#define ASN1_PCTX_FLAGS_SHOW_SEQUENCE		0x002
-/* Mark start and end of SEQUENCE/SET OF */
-#define ASN1_PCTX_FLAGS_SHOW_SSOF		0x004
-/* Show the ASN1 type of primitives */
-#define ASN1_PCTX_FLAGS_SHOW_TYPE		0x008
-/* Don't show ASN1 type of ANY */
-#define ASN1_PCTX_FLAGS_NO_ANY_TYPE		0x010
-/* Don't show ASN1 type of MSTRINGs */
-#define ASN1_PCTX_FLAGS_NO_MSTRING_TYPE		0x020
-/* Don't show field names in SEQUENCE */
-#define ASN1_PCTX_FLAGS_NO_FIELD_NAME		0x040
-/* Show structure names of each SEQUENCE field */
-#define ASN1_PCTX_FLAGS_SHOW_FIELD_STRUCT_NAME	0x080
-/* Don't show structure name even at top level */
-#define ASN1_PCTX_FLAGS_NO_STRUCT_NAME		0x100
-
-OPENSSL_EXPORT int ASN1_item_print(BIO *out, ASN1_VALUE *ifld, int indent, const ASN1_ITEM *it, const ASN1_PCTX *pctx);
-OPENSSL_EXPORT ASN1_PCTX *ASN1_PCTX_new(void);
-OPENSSL_EXPORT void ASN1_PCTX_free(ASN1_PCTX *p);
-OPENSSL_EXPORT unsigned long ASN1_PCTX_get_flags(ASN1_PCTX *p);
-OPENSSL_EXPORT void ASN1_PCTX_set_flags(ASN1_PCTX *p, unsigned long flags);
-OPENSSL_EXPORT unsigned long ASN1_PCTX_get_nm_flags(ASN1_PCTX *p);
-OPENSSL_EXPORT void ASN1_PCTX_set_nm_flags(ASN1_PCTX *p, unsigned long flags);
-OPENSSL_EXPORT unsigned long ASN1_PCTX_get_cert_flags(ASN1_PCTX *p);
-OPENSSL_EXPORT void ASN1_PCTX_set_cert_flags(ASN1_PCTX *p, unsigned long flags);
-OPENSSL_EXPORT unsigned long ASN1_PCTX_get_oid_flags(ASN1_PCTX *p);
-OPENSSL_EXPORT void ASN1_PCTX_set_oid_flags(ASN1_PCTX *p, unsigned long flags);
-OPENSSL_EXPORT unsigned long ASN1_PCTX_get_str_flags(ASN1_PCTX *p);
-OPENSSL_EXPORT void ASN1_PCTX_set_str_flags(ASN1_PCTX *p, unsigned long flags);
-
-OPENSSL_EXPORT const BIO_METHOD *BIO_f_asn1(void);
-
-OPENSSL_EXPORT BIO *BIO_new_NDEF(BIO *out, ASN1_VALUE *val, const ASN1_ITEM *it);
-
-OPENSSL_EXPORT int i2d_ASN1_bio_stream(BIO *out, ASN1_VALUE *val, BIO *in, int flags, const ASN1_ITEM *it);
-OPENSSL_EXPORT int PEM_write_bio_ASN1_stream(BIO *out, ASN1_VALUE *val, BIO *in, int flags, const char *hdr, const ASN1_ITEM *it);
-OPENSSL_EXPORT ASN1_VALUE *SMIME_read_ASN1(BIO *bio, BIO **bcont, const ASN1_ITEM *it);
-OPENSSL_EXPORT int SMIME_crlf_copy(BIO *in, BIO *out, int flags);
-OPENSSL_EXPORT int SMIME_text(BIO *in, BIO *out);
-
-/* BEGIN ERROR CODES */
-/* The following lines are auto generated by the script mkerr.pl. Any changes
- * made after this point may be overwritten when the script is next run.
- */
-void ERR_load_ASN1_strings(void);
-
-typedef int asn1_ps_func(BIO *b, unsigned char **pbuf, int *plen, void *parg);
-OPENSSL_EXPORT int BIO_asn1_set_prefix(BIO *b, asn1_ps_func *prefix, asn1_ps_func *prefix_free);
-OPENSSL_EXPORT int BIO_asn1_get_prefix(BIO *b, asn1_ps_func **pprefix, asn1_ps_func **pprefix_free);
-OPENSSL_EXPORT int BIO_asn1_set_suffix(BIO *b, asn1_ps_func *suffix, asn1_ps_func *suffix_free);
-OPENSSL_EXPORT int BIO_asn1_get_suffix(BIO *b, asn1_ps_func **psuffix, asn1_ps_func **psuffix_free);
 
 #ifdef  __cplusplus
 }
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_STACK_DELETER(ASN1_OBJECT, ASN1_OBJECT_free)
+
+BORINGSSL_MAKE_DELETER(ASN1_OBJECT, ASN1_OBJECT_free)
+BORINGSSL_MAKE_DELETER(ASN1_STRING, ASN1_STRING_free)
+BORINGSSL_MAKE_DELETER(ASN1_TYPE, ASN1_TYPE_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #define ASN1_R_ASN1_LENGTH_MISMATCH 100

@@ -164,16 +164,17 @@ STACK_OF(X509_NAME) *SSL_load_client_CA_file(const char *file) {
       goto err;
     }
 
-    /* check for duplicates */
-    xn = X509_NAME_dup(xn);
-    if (xn == NULL) {
-      goto err;
-    }
+    /* Check for duplicates. */
     if (sk_X509_NAME_find(sk, NULL, xn)) {
+      continue;
+    }
+
+    xn = X509_NAME_dup(xn);
+    if (xn == NULL ||
+        !sk_X509_NAME_push(sk /* non-owning */, xn) ||
+        !sk_X509_NAME_push(ret /* owning */, xn)) {
       X509_NAME_free(xn);
-    } else {
-      sk_X509_NAME_push(sk, xn);
-      sk_X509_NAME_push(ret, xn);
+      goto err;
     }
   }
 
@@ -197,7 +198,7 @@ int SSL_add_file_cert_subjects_to_stack(STACK_OF(X509_NAME) *stack,
   BIO *in;
   X509 *x = NULL;
   X509_NAME *xn = NULL;
-  int ret = 1;
+  int ret = 0;
   int (*oldcmp)(const X509_NAME **a, const X509_NAME **b);
 
   oldcmp = sk_X509_NAME_set_cmp_func(stack, xname_cmp);
@@ -220,24 +221,24 @@ int SSL_add_file_cert_subjects_to_stack(STACK_OF(X509_NAME) *stack,
     if (xn == NULL) {
       goto err;
     }
-    xn = X509_NAME_dup(xn);
-    if (xn == NULL) {
-      goto err;
-    }
+
+    /* Check for duplicates. */
     if (sk_X509_NAME_find(stack, NULL, xn)) {
+      continue;
+    }
+
+    xn = X509_NAME_dup(xn);
+    if (xn == NULL ||
+        !sk_X509_NAME_push(stack, xn)) {
       X509_NAME_free(xn);
-    } else {
-      sk_X509_NAME_push(stack, xn);
+      goto err;
     }
   }
 
   ERR_clear_error();
+  ret = 1;
 
-  if (0) {
-  err:
-    ret = 0;
-  }
-
+err:
   BIO_free(in);
   X509_free(x);
 
@@ -572,14 +573,3 @@ void SSL_CTX_set_default_passwd_cb(SSL_CTX *ctx, pem_password_cb *cb) {
 void SSL_CTX_set_default_passwd_cb_userdata(SSL_CTX *ctx, void *data) {
   ctx->default_passwd_callback_userdata = data;
 }
-
-SSL_SESSION *d2i_SSL_SESSION_bio(BIO *bio, SSL_SESSION **out) {
-  return ASN1_d2i_bio_of(SSL_SESSION, SSL_SESSION_new, d2i_SSL_SESSION, bio,
-                         out);
-}
-
-int i2d_SSL_SESSION_bio(BIO *bio, const SSL_SESSION *session) {
-  return ASN1_i2d_bio_of(SSL_SESSION, i2d_SSL_SESSION, bio, session);
-}
-
-IMPLEMENT_PEM_rw(SSL_SESSION, SSL_SESSION, PEM_STRING_SSL_SESSION, SSL_SESSION)

@@ -190,9 +190,9 @@ int64_t File::Seek(Whence whence, int64_t offset) {
   return lseek64(file_.get(), static_cast<off64_t>(offset),
                  static_cast<int>(whence));
 #else
-  static_assert(sizeof(int64_t) == sizeof(off_t), "off_t must be 64 bits");
-  return lseek(file_.get(), static_cast<off_t>(offset),
-               static_cast<int>(whence));
+  static_assert(sizeof(int64_t) == sizeof(off64_t), "off64_t must be 64 bits");
+  return lseek64(file_.get(), static_cast<off64_t>(offset),
+                 static_cast<int>(whence));
 #endif
 }
 

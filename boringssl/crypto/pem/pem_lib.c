@@ -71,6 +71,9 @@
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 
+#include "../internal.h"
+
+
 #define MIN_LENGTH      4
 
 static int load_iv(char **fromp, unsigned char *to, int num);
@@ -262,7 +265,7 @@ int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp,
 
     if (enc != NULL) {
         objstr = OBJ_nid2sn(EVP_CIPHER_nid(enc));
-        if (objstr == NULL) {
+        if (objstr == NULL || EVP_CIPHER_iv_length(enc) == 0) {
             OPENSSL_PUT_ERROR(PEM, PEM_R_UNSUPPORTED_CIPHER);
             goto err;
         }
@@ -638,7 +641,7 @@ int PEM_read_bio(BIO *bp, char **name, char **header, unsigned char **data,
                 OPENSSL_PUT_ERROR(PEM, ERR_R_MALLOC_FAILURE);
                 goto err;
             }
-            memcpy(nameB->data, &(buf[11]), i - 6);
+            OPENSSL_memcpy(nameB->data, &(buf[11]), i - 6);
             nameB->data[i - 6] = '\0';
             break;
         }
@@ -669,7 +672,7 @@ int PEM_read_bio(BIO *bp, char **name, char **header, unsigned char **data,
             nohead = 1;
             break;
         }
-        memcpy(&(headerB->data[hl]), buf, i);
+        OPENSSL_memcpy(&(headerB->data[hl]), buf, i);
         headerB->data[hl + i] = '\0';
         hl += i;
     }
@@ -701,7 +704,7 @@ int PEM_read_bio(BIO *bp, char **name, char **header, unsigned char **data,
                 OPENSSL_PUT_ERROR(PEM, ERR_R_MALLOC_FAILURE);
                 goto err;
             }
-            memcpy(&(dataB->data[bl]), buf, i);
+            OPENSSL_memcpy(&(dataB->data[bl]), buf, i);
             dataB->data[bl + i] = '\0';
             bl += i;
             if (end) {

@@ -55,3 +55,34 @@ add_executable(
 target_link_libraries(client Fuzzer)
 target_link_libraries(client crypto)
 target_link_libraries(client ssl)
+
+add_executable(
+  read_pem
+
+  read_pem.cc
+)
+
+target_link_libraries(read_pem Fuzzer)
+target_link_libraries(read_pem crypto)
+
+add_executable(
+  ssl_ctx_api
+
+  ssl_ctx_api.cc
+)
+
+target_link_libraries(ssl_ctx_api Fuzzer)
+target_link_libraries(ssl_ctx_api crypto)
+target_link_libraries(ssl_ctx_api ssl)
+
+add_executable(
+  session
+
+  session.cc
+
+  $<TARGET_OBJECTS:test_support>
+)
+
+target_link_libraries(session Fuzzer)
+target_link_libraries(session crypto)
+target_link_libraries(session ssl)

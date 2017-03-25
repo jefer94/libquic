@@ -8,7 +8,7 @@
 # ====================================================================
 #
 # December 2014
-# 
+#
 # ChaCha20 for ARMv4.
 #
 # Performance in cycles per byte out of large buffer.
@@ -28,8 +28,8 @@
 #	20-25% worse;
 
 $flavour = shift;
-if ($flavour=~/^\w[\w\-]*\.\w+$/) { $output=$flavour; undef $flavour; }
-else { while (($output=shift) && ($output!~/^\w[\w\-]*\.\w+$/)) {} }
+if ($flavour=~/\w[\w\-]*\.\w+$/) { $output=$flavour; undef $flavour; }
+else { while (($output=shift) && ($output!~/\w[\w\-]*\.\w+$/)) {} }
 
 if ($flavour && $flavour ne "void") {
     $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
@@ -713,7 +713,7 @@ ChaCha20_neon:
 	vadd.i32	$d2,$d1,$t0		@ counter+2
 	str		@t[3], [sp,#4*(16+15)]
 	mov		@t[3],#10
-	add		@x[12],@x[12],#3	@ counter+3 
+	add		@x[12],@x[12],#3	@ counter+3
 	b		.Loop_neon
 
 .align	4
@@ -1127,7 +1127,7 @@ $code.=<<___;
 	ldrb		@t[1],[r12],#1		@ read input
 	subs		@t[3],@t[3],#1
 	eor		@t[0],@t[0],@t[1]
-	strb		@t[0],[r14],#1		@ store ouput
+	strb		@t[0],[r14],#1		@ store output
 	bne		.Loop_tail_neon
 
 .Ldone_neon:

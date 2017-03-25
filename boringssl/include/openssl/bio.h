@@ -96,8 +96,8 @@ OPENSSL_EXPORT int BIO_free(BIO *bio);
  * TODO(fork): remove. */
 OPENSSL_EXPORT void BIO_vfree(BIO *bio);
 
-/* BIO_up_ref increments the reference count of |bio| and returns it. */
-OPENSSL_EXPORT BIO *BIO_up_ref(BIO *bio);
+/* BIO_up_ref increments the reference count of |bio| and returns one. */
+OPENSSL_EXPORT int BIO_up_ref(BIO *bio);
 
 
 /* Basic I/O. */
@@ -152,6 +152,11 @@ OPENSSL_EXPORT long BIO_int_ctrl(BIO *bp, int cmd, long larg, int iarg);
  * otherwise. */
 OPENSSL_EXPORT int BIO_reset(BIO *bio);
 
+/* BIO_eof returns non-zero when |bio| has reached end-of-file. The precise
+ * meaning of which depends on the concrete type of |bio|. Note that in the
+ * case of BIO_pair this always returns non-zero. */
+OPENSSL_EXPORT int BIO_eof(BIO *bio);
+
 /* BIO_set_flags ORs |flags| with |bio->flags|. */
 OPENSSL_EXPORT void BIO_set_flags(BIO *bio, int flags);
 
@@ -179,21 +184,11 @@ OPENSSL_EXPORT int BIO_should_retry(const BIO *bio);
  * |BIO_get_retry_reason|. */
 OPENSSL_EXPORT int BIO_should_io_special(const BIO *bio);
 
-/* BIO_RR_SSL_X509_LOOKUP indicates that an SSL BIO blocked because the SSL
- * library returned with SSL_ERROR_WANT_X509_LOOKUP.
- *
- * TODO(fork): remove. */
-#define BIO_RR_SSL_X509_LOOKUP 0x01
-
 /* BIO_RR_CONNECT indicates that a connect would have blocked */
 #define BIO_RR_CONNECT 0x02
 
 /* BIO_RR_ACCEPT indicates that an accept would have blocked */
 #define BIO_RR_ACCEPT 0x03
-
-/* BIO_RR_SSL_CHANNEL_ID_LOOKUP indicates that the ChannelID code cannot find
- * a private key for a TLS connection. */
-#define BIO_RR_SSL_CHANNEL_ID_LOOKUP 0x04
 
 /* BIO_get_retry_reason returns the special I/O operation that needs to be
  * retried. The return value is one of the |BIO_RR_*| values. */
@@ -231,7 +226,7 @@ typedef long (*bio_info_cb)(BIO *bio, int event, const char *parg, int cmd,
                             long larg, long return_value);
 
 /* BIO_callback_ctrl allows the callback function to be manipulated. The |cmd|
- * arg will generally be |BIO_CTRL_SET_CALLBACK| but arbitary command values
+ * arg will generally be |BIO_CTRL_SET_CALLBACK| but arbitrary command values
  * can be interpreted by the |BIO|. */
 OPENSSL_EXPORT long BIO_callback_ctrl(BIO *bio, int cmd, bio_info_cb fp);
 
@@ -328,9 +323,9 @@ OPENSSL_EXPORT int BIO_indent(BIO *bio, unsigned indent, unsigned max_indent);
 OPENSSL_EXPORT int BIO_hexdump(BIO *bio, const uint8_t *data, size_t len,
                                unsigned indent);
 
-/* BIO_print_errors prints the current contents of the error stack to |bio|
+/* ERR_print_errors prints the current contents of the error stack to |bio|
  * using human readable strings where possible. */
-OPENSSL_EXPORT void BIO_print_errors(BIO *bio);
+OPENSSL_EXPORT void ERR_print_errors(BIO *bio);
 
 /* BIO_read_asn1 reads a single ASN.1 object from |bio|. If successful it sets
  * |*out| to be an allocated buffer (that should be freed with |OPENSSL_free|),
@@ -361,8 +356,6 @@ OPENSSL_EXPORT int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len,
  * underlying |BUF_MEM| will not be freed when the |BIO| is freed.
  *
  * Memory BIOs support |BIO_gets| and |BIO_puts|.
- *
- * |BIO_eof| is true if no data is in the BIO.
  *
  * |BIO_ctrl_pending| returns the number of bytes currently stored. */
 
@@ -420,12 +413,7 @@ OPENSSL_EXPORT int BIO_set_mem_eof_return(BIO *bio, int eof_value);
  * underlying file descriptor when the BIO is freed.
  *
  * |BIO_reset| attempts to seek the file pointer to the start of file using
- * |lseek|.
- *
- * |BIO_seek| sets the file pointer to position |off| from start of file using
- * |lseek|.
- *
- * |BIO_tell| returns the current file position. */
+ * |lseek|. */
 
 /* BIO_s_fd returns a |BIO_METHOD| for file descriptor fds. */
 OPENSSL_EXPORT const BIO_METHOD *BIO_s_fd(void);
@@ -460,11 +448,6 @@ OPENSSL_EXPORT int BIO_get_fd(BIO *bio, int *out_fd);
  * |BIO_reset| attempts to seek the file pointer to the start of file using
  * |fseek|.
  *
- * |BIO_seek| sets the file pointer to the given position from the start of
- * file using |fseek|.
- *
- * |BIO_eof| calls |feof|.
- *
  * Setting the close flag causes |fclose| to be called on the stream when the
  * BIO is freed. */
 
@@ -486,7 +469,7 @@ OPENSSL_EXPORT int BIO_get_fp(BIO *bio, FILE **out_file);
 
 /* BIO_set_fp sets the |FILE| for |bio|. If |close_flag| is |BIO_CLOSE| then
  * |fclose| will be called on |file| when |bio| is closed. It returns one on
- * sucess and zero otherwise. */
+ * success and zero otherwise. */
 OPENSSL_EXPORT int BIO_set_fp(BIO *bio, FILE *file, int close_flag);
 
 /* BIO_read_filename opens |filename| for reading and sets the result as the
@@ -508,23 +491,6 @@ OPENSSL_EXPORT int BIO_append_filename(BIO *bio, const char *filename);
  * as the |FILE| for |bio|. It returns one on success and zero otherwise. The
  * |FILE| will be closed when |bio| is freed. */
 OPENSSL_EXPORT int BIO_rw_filename(BIO *bio, const char *filename);
-
-
-/* Buffer BIOs.
- *
- * Buffer BIOs are a filter-type BIO, i.e. they are designed to be used in a
- * chain of BIOs. They provide buffering to reduce the number of operations on
- * the underlying BIOs. */
-
-OPENSSL_EXPORT const BIO_METHOD *BIO_f_buffer(void);
-
-/* BIO_set_read_buffer_size sets the size, in bytes, of the read buffer and
- * clears it. It returns one on success and zero on failure. */
-OPENSSL_EXPORT int BIO_set_read_buffer_size(BIO *bio, int buffer_size);
-
-/* BIO_set_write_buffer_size sets the size, in bytes, of the write buffer and
- * clears it. It returns one on success and zero on failure. */
-OPENSSL_EXPORT int BIO_set_write_buffer_size(BIO *bio, int buffer_size);
 
 
 /* Socket BIOs.
@@ -574,6 +540,10 @@ OPENSSL_EXPORT int BIO_set_conn_hostname(BIO *bio,
  * will connect to. It returns one on success and zero otherwise. */
 OPENSSL_EXPORT int BIO_set_conn_port(BIO *bio, const char *port_str);
 
+/* BIO_set_conn_int_port sets |*port| as the port that |bio| will connect to.
+ * It returns one on success and zero otherwise. */
+OPENSSL_EXPORT int BIO_set_conn_int_port(BIO *bio, const int *port);
+
 /* BIO_set_nbio sets whether |bio| will use non-blocking I/O operations. It
  * returns one on success and zero otherwise. */
 OPENSSL_EXPORT int BIO_set_nbio(BIO *bio, int on);
@@ -595,8 +565,8 @@ OPENSSL_EXPORT int BIO_do_connect(BIO *bio);
 #define BIO_CTRL_DGRAM_MTU_EXCEEDED 43 /* check whether the MTU was exceed in
                                           the previous write operation. */
 
-#define BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT \
-  45 /* Next DTLS handshake timeout to adjust socket timeouts */
+/* BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT is unsupported as it is unused by consumers
+ * and depends on |timeval|, which is not 2038-clean on all platforms. */
 
 #define BIO_CTRL_DGRAM_GET_PEER           46
 
@@ -615,18 +585,6 @@ OPENSSL_EXPORT int BIO_do_connect(BIO *bio);
 OPENSSL_EXPORT int BIO_new_bio_pair(BIO **out1, size_t writebuf1, BIO **out2,
                                     size_t writebuf2);
 
-/* BIO_new_bio_pair_external_buf is the same as |BIO_new_bio_pair| with the
- * difference that the caller keeps ownership of the write buffers
- * |ext_writebuf1_len| and |ext_writebuf2_len|. This is useful when using zero
- * copy API for read and write operations, in cases where the buffers need to
- * outlive the BIO pairs. It returns one on success and zero on error. */
-OPENSSL_EXPORT int BIO_new_bio_pair_external_buf(BIO** bio1_p,
-                                                 size_t writebuf1_len,
-                                                 uint8_t* ext_writebuf1,
-                                                 BIO** bio2_p,
-                                                 size_t writebuf2_len,
-                                                 uint8_t* ext_writebuf2);
-
 /* BIO_ctrl_get_read_request returns the number of bytes that the other side of
  * |bio| tried (unsuccessfully) to read. */
 OPENSSL_EXPORT size_t BIO_ctrl_get_read_request(BIO *bio);
@@ -640,63 +598,6 @@ OPENSSL_EXPORT size_t BIO_ctrl_get_write_guarantee(BIO *bio);
  * side of the pair. Future |BIO_write| calls on |bio| will fail. It returns
  * one on success and zero otherwise. */
 OPENSSL_EXPORT int BIO_shutdown_wr(BIO *bio);
-
-
-/* Zero copy versions of BIO_read and BIO_write for BIO pairs. */
-
-/* BIO_zero_copy_get_read_buf initiates a zero copy read operation.
- * |out_read_buf| is set to the internal read buffer, and |out_buf_offset| is
- * set to the current read position of |out_read_buf|. The number of bytes
- * available for read from |out_read_buf| + |out_buf_offset| is returned in
- * |out_available_bytes|. Note that this function might report fewer bytes
- * available than |BIO_pending|, if the internal ring buffer is wrapped. It
- * returns one on success. In case of error it returns zero and pushes to the
- * error stack.
- *
- * The zero copy read operation is completed by calling
- * |BIO_zero_copy_get_read_buf_done|. Neither |BIO_zero_copy_get_read_buf| nor
- * any other I/O read operation may be called while a zero copy read operation
- * is active. */
-OPENSSL_EXPORT int BIO_zero_copy_get_read_buf(BIO* bio,
-                                              uint8_t** out_read_buf,
-                                              size_t* out_buf_offset,
-                                              size_t* out_available_bytes);
-
-/* BIO_zero_copy_get_read_buf_done must be called after reading from a BIO using
- * |BIO_zero_copy_get_read_buf| to finish the read operation. The |bytes_read|
- * argument is the number of bytes read.
- *
- * It returns one on success. In case of error it returns zero and pushes to the
- * error stack. */
-OPENSSL_EXPORT int BIO_zero_copy_get_read_buf_done(BIO* bio, size_t bytes_read);
-
-/* BIO_zero_copy_get_write_buf initiates a zero copy write operation.
- * |out_write_buf| is set to to the internal write buffer, and |out_buf_offset|
- * is set to the current write position of |out_write_buf|.
- * The number of bytes available for write from |out_write_buf| +
- * |out_buf_offset| is returned in |out_available_bytes|. Note that this
- * function might report fewer bytes available than
- * |BIO_ctrl_get_write_guarantee|, if the internal buffer is wrapped. It returns
- * one on success. In case of error it returns zero and pushes to the error
- * stack.
- *
- * The zero copy write operation is completed by calling
- * |BIO_zero_copy_get_write_buf_done|. Neither |BIO_zero_copy_get_write_buf|
- * nor any other I/O write operation may be called while a zero copy write
- * operation is active. */
-OPENSSL_EXPORT int BIO_zero_copy_get_write_buf(BIO* bio,
-                                               uint8_t** out_write_buf,
-                                               size_t* out_buf_offset,
-                                               size_t* out_available_bytes);
-
-/* BIO_zero_copy_get_write_buf_done must be called after writing to a BIO using
- * |BIO_zero_copy_get_write_buf| to finish the write operation. The
- * |bytes_written| argument gives the number of bytes written.
- *
- * It returns one on success. In case of error it returns zero and pushes to the
- * error stack. */
-OPENSSL_EXPORT int BIO_zero_copy_get_write_buf_done(BIO* bio,
-                                                    size_t bytes_written);
 
 
 /* BIO_NOCLOSE and |BIO_CLOSE| can be used as symbolic arguments when a "close
@@ -722,6 +623,8 @@ OPENSSL_EXPORT int BIO_zero_copy_get_write_buf_done(BIO* bio,
 #define BIO_CTRL_INFO		3  /* opt - extra tit-bits */
 #define BIO_CTRL_SET		4  /* man - set the 'IO' type */
 #define BIO_CTRL_GET		5  /* man - get the 'IO' type */
+#define BIO_CTRL_PUSH	6
+#define BIO_CTRL_POP	7
 #define BIO_CTRL_GET_CLOSE	8  /* man - set the 'close' on free */
 #define BIO_CTRL_SET_CLOSE	9  /* man - set the 'close' on free */
 #define BIO_CTRL_PENDING	10  /* opt - is their more data buffered */
@@ -732,18 +635,9 @@ OPENSSL_EXPORT int BIO_zero_copy_get_write_buf_done(BIO* bio,
 #define BIO_CTRL_GET_CALLBACK	15  /* opt - set callback function */
 #define BIO_CTRL_SET_FILENAME	30	/* BIO_s_file special */
 
-/* These are never used, but exist to allow code to compile more easily. */
-#define BIO_CTRL_DUP	100
-#define BIO_CTRL_PUSH	101
-#define BIO_CTRL_POP	102
-
-
-/* Android compatibility section.
- *
- * A previous version of BoringSSL used in Android renamed ERR_print_errors_fp
- * to BIO_print_errors_fp. It has subsequently been renamed back to
- * ERR_print_errors_fp. */
-#define BIO_print_errors_fp ERR_print_errors_fp
+/* BIO_CTRL_DUP is never used, but exists to allow code to compile more
+ * easily. */
+#define BIO_CTRL_DUP	12
 
 
 /* Deprecated functions. */
@@ -755,8 +649,10 @@ OPENSSL_EXPORT int BIO_zero_copy_get_write_buf_done(BIO* bio,
  * on one line. */
 OPENSSL_EXPORT const BIO_METHOD *BIO_f_base64(void);
 
-/* ERR_print_errors is an alias for |BIO_print_errors|. */
-OPENSSL_EXPORT void ERR_print_errors(BIO *bio);
+OPENSSL_EXPORT void BIO_set_retry_special(BIO *bio);
+
+/* BIO_set_write_buffer_size returns zero. */
+OPENSSL_EXPORT int BIO_set_write_buffer_size(BIO *bio, int buffer_size);
 
 
 /* Private functions */
@@ -899,6 +795,17 @@ struct bio_st {
 
 #if defined(__cplusplus)
 }  /* extern C */
+
+extern "C++" {
+
+namespace bssl {
+
+BORINGSSL_MAKE_DELETER(BIO, BIO_free)
+
+}  // namespace bssl
+
+}  /* extern C++ */
+
 #endif
 
 #define BIO_R_BAD_FOPEN_MODE 100

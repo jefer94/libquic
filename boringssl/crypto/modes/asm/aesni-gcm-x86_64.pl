@@ -22,10 +22,11 @@
 # [1] and [2], with MOVBE twist suggested by Ilya Albrekht and Max
 # Locktyukhin of Intel Corp. who verified that it reduces shuffles
 # pressure with notable relative improvement, achieving 1.0 cycle per
-# byte processed with 128-bit key on Haswell processor, and 0.74 -
-# on Broadwell. [Mentioned results are raw profiled measurements for
-# favourable packet size, one divisible by 96. Applications using the
-# EVP interface will observe a few percent worse performance.]
+# byte processed with 128-bit key on Haswell processor, 0.74 - on
+# Broadwell, 0.63 - on Skylake... [Mentioned results are raw profiled
+# measurements for favourable packet size, one divisible by 96.
+# Applications using the EVP interface will observe a few percent
+# worse performance.]
 #
 # [1] http://rt.openssl.org/Ticket/Display.html?id=2900&user=guest&pass=guest
 # [2] http://www.intel.com/content/dam/www/public/us/en/documents/software-support/enabling-high-performance-gcm.pdf
@@ -41,17 +42,24 @@ $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
 ( $xlate="${dir}../../perlasm/x86_64-xlate.pl" and -f $xlate) or
 die "can't locate x86_64-xlate.pl";
 
-# This must be kept in sync with |$avx| in ghash-x86_64.pl; otherwise tags will
+# |$avx| in ghash-x86_64.pl must be set to at least 1; otherwise tags will
 # be computed incorrectly.
 #
 # In upstream, this is controlled by shelling out to the compiler to check
 # versions, but BoringSSL is intended to be used with pre-generated perlasm
 # output, so this isn't useful anyway.
-$avx = 0;
+#
+# The upstream code uses the condition |$avx>1| even though no AVX2
+# instructions are used, because it assumes MOVBE is supported by the assembler
+# if and only if AVX2 is also supported by the assembler; see
+# https://marc.info/?l=openssl-dev&m=146567589526984&w=2.
+$avx = 2;
 
-open OUT,"| \"$^X\" $xlate $flavour $output";
+open OUT,"| \"$^X\" \"$xlate\" $flavour \"$output\"";
 *STDOUT=*OUT;
 
+# See the comment above regarding why the condition is ($avx>1) when there are
+# no AVX2 instructions being used.
 if ($avx>1) {{{
 
 ($inp,$out,$len,$key,$ivp,$Xip)=("%rdi","%rsi","%rdx","%rcx","%r8","%r9");
